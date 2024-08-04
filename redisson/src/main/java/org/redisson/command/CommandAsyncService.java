@@ -134,7 +134,9 @@ public class CommandAsyncService implements CommandAsyncExecutor {
     public void syncSubscription(RFuture<?> future) {
         MasterSlaveServersConfig config = connectionManager.getConfig();
         try {
+            //超时总时间 = 3s + 1.5 * 3 = 7.5s
             int timeout = config.getTimeout() + config.getRetryInterval() * config.getRetryAttempts();
+            //阻塞等待结果如果过了7.5秒直接抛出异常
             if (!future.await(timeout)) {
                 throw new RedisTimeoutException("Subscribe timeout: (" + timeout + "ms)");
             }

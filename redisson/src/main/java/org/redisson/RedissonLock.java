@@ -148,22 +148,28 @@ public class RedissonLock extends RedissonExpirable implements RLock {
         if (ttl == null) {
             return;
         }
-
+        //ttl 不为null，证明已经有其它线程已经获取到了锁,此时尝试注册监听器
         RFuture<RedissonLockEntry> future = subscribe(threadId);
+
         commandExecutor.syncSubscription(future);
 
         try {
             while (true) {
+                //尝试获取锁
                 ttl = tryAcquire(leaseTime, unit, threadId);
                 // lock acquired
+                //锁获取成功直接跳出循环
                 if (ttl == null) {
                     break;
                 }
 
                 // waiting for message
                 if (ttl >= 0) {
+                    //获取锁失败休眠一段时间
                     getEntry(threadId).getLatch().tryAcquire(ttl, TimeUnit.MILLISECONDS);
                 } else {
+                    //证明锁已经过期或者释放了，所以直接获取semaphore并进入阻塞状态，
+                    // 等待持有锁的线程释放锁并被唤醒
                     getEntry(threadId).getLatch().acquire();
                 }
             }
@@ -208,13 +214,16 @@ public class RedissonLock extends RedissonExpirable implements RLock {
         ttlRemainingFuture.addListener(new FutureListener<Long>() {
             @Override
             public void operationComplete(Future<Long> future) throws Exception {
+                //执行失败，直接返回
                 if (!future.isSuccess()) {
                     return;
                 }
-
+                //返回的结果
                 Long ttlRemaining = future.getNow();
                 // lock acquired
+                //如果是null，则代表是加锁成功
                 if (ttlRemaining == null) {
+                    //执行定时任务刷新锁的过期时间
                     scheduleExpirationRenewal(threadId);
                 }
             }
@@ -228,27 +237,30 @@ public class RedissonLock extends RedissonExpirable implements RLock {
     }
 
     private void scheduleExpirationRenewal(final long threadId) {
+        //如果已经包含了证明已经有续期任务，则直接返回
         if (expirationRenewalMap.containsKey(getEntryName())) {
             return;
         }
-
+        //创建定时任务，默认每隔10秒执行一次
         Timeout task = commandExecutor.getConnectionManager().newTimeout(new TimerTask() {
             @Override
             public void run(Timeout timeout) throws Exception {
-                
+                //执行续期的脚本
                 RFuture<Boolean> future = renewExpirationAsync(threadId);
                 
                 future.addListener(new FutureListener<Boolean>() {
                     @Override
                     public void operationComplete(Future<Boolean> future) throws Exception {
+                        //删除key
                         expirationRenewalMap.remove(getEntryName());
                         if (!future.isSuccess()) {
                             log.error("Can't update lock " + getName() + " expiration", future.cause());
                             return;
                         }
-                        
+                        //如果还是自己持有的锁
                         if (future.getNow()) {
                             // reschedule itself
+                            //重新刷新定时任务
                             scheduleExpirationRenewal(threadId);
                         }
                     }

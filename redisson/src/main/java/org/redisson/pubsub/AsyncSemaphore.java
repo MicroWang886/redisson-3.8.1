@@ -158,6 +158,7 @@ public class AsyncSemaphore {
         
         synchronized (this) {
             counter++;
+            //迭代监听器链表
             Iterator<Entry> iter = listeners.iterator();
             if (iter.hasNext()) {
                 Entry entry = iter.next();
@@ -169,6 +170,7 @@ public class AsyncSemaphore {
         }
         
         if (entryToAcquire != null) {
+            //重新调用acquire方法进行尝试获取信号量
             acquire(entryToAcquire.getRunnable(), entryToAcquire.getPermits());
         }
     }

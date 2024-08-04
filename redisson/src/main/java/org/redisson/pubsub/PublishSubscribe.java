@@ -78,14 +78,16 @@ abstract class PublishSubscribe<E extends PubSubEntry<E>> {
 
             @Override
             public void run() {
+                //这里通过lockName获取RedissonLockEntry
                 E entry = entries.get(entryName);
+                //如果不为null,代表已经存在
                 if (entry != null) {
                     entry.aquire();
                     semaphore.release();
                     entry.getPromise().addListener(new TransferListener<E>(newPromise));
                     return;
                 }
-                
+                //如果RedissonLockEntry为null
                 E value = createEntry(newPromise);
                 value.aquire();
                 
@@ -96,7 +98,7 @@ abstract class PublishSubscribe<E extends PubSubEntry<E>> {
                     oldValue.getPromise().addListener(new TransferListener<E>(newPromise));
                     return;
                 }
-                
+                //创建listener
                 RedisPubSubListener<Object> listener = createListener(channelName, value);
                 subscribeService.subscribe(LongCodec.INSTANCE, channelName, semaphore, listener);
             }
