@@ -92,6 +92,10 @@ public class RedissonFairLock extends RedissonLock implements RLock {
         if (command == RedisCommands.EVAL_NULL_BOOLEAN) {
             return commandExecutor.evalWriteAsync(getName(), LongCodec.INSTANCE, command,
                     // remove stale threads
+                    // 1.如果线程队列不存在或者队列不存在
+                    // 2. 如果锁不存在且队列不存在或者队列中第一个等待线程是自己
+                    //      2.1 等待队列出列
+                    //
                     "while true do "
                     + "local firstThreadId2 = redis.call('lindex', KEYS[2], 0);"
                     + "if firstThreadId2 == false then "
@@ -193,7 +197,7 @@ public class RedissonFairLock extends RedissonLock implements RLock {
                     + "break;"
                 + "end; "
               + "end;"
-                
+                //锁不存在 且等待队列不会null
               + "if (redis.call('exists', KEYS[1]) == 0) then " + 
                     "local nextThreadId = redis.call('lindex', KEYS[2], 0); " + 
                     "if nextThreadId ~= false then " +
@@ -201,6 +205,7 @@ public class RedissonFairLock extends RedissonLock implements RLock {
                     "end; " +
                     "return 1; " +
                 "end;" +
+                //锁存在 队列为null 锁存在队列不为null 锁不存在 队列为null
                 "if (redis.call('hexists', KEYS[1], ARGV[3]) == 0) then " +
                     "return nil;" +
                 "end; " +
